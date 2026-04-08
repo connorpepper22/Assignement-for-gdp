@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 [RequireComponent(typeof(Rigidbody))]
-public class Tank_Movement : MonoBehaviour
+public class Player_Controller : MonoBehaviour
 {
     // Movement speed in units per second
     public float speed = 3f;
