@@ -932,6 +932,37 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 620725488}
   m_CullTransparentMesh: 1
+--- !u!1 &895604375
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 895604376}
+  m_Layer: 0
+  m_Name: Turret Rotate
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &895604376
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 895604375}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0.00000027616753, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -0.0586, y: -0.0004, z: 0.0013}
+  m_LocalScale: {x: 0.1, y: 0.1, z: 0.1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 3712323545636630439}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1022852351
 GameObject:
   m_ObjectHideFlags: 0
@@ -1824,7 +1855,7 @@ RectTransform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1433928449}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: 0, y: 0, z: -0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1832,7 +1863,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 217}
+  m_AnchoredPosition: {x: -74, y: 231}
   m_SizeDelta: {x: 200, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1433928451
@@ -1855,7 +1886,9 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: WASD to move
+  m_text: 'WASD to move, Use mouse input to rotate the turret.
+
+'
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -1920,7 +1953,7 @@ MonoBehaviour:
   m_VertexBufferAutoSizeReduction: 0
   m_useMaxVisibleDescender: 1
   m_pageToDisplay: 1
-  m_margin: {x: 0, y: 0, z: 0, w: -33.9653}
+  m_margin: {x: 0, y: 0, z: -176.58734, w: -33.9653}
   m_isUsingLegacyAnimationComponent: 0
   m_isVolumetricText: 0
   m_hasFontAssetChanged: 0
@@ -2693,6 +2726,37 @@ MonoBehaviour:
       enableFptlForForwardOpaque: 0
       enableBigTilePrepass: 0
       isFptlEnabled: 0
+--- !u!1 &1898964452
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1898964453}
+  m_Layer: 0
+  m_Name: End Of Barrel
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1898964453
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1898964452}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0.00000027616753, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -0.0511, y: 0.0066, z: 0.1549}
+  m_LocalScale: {x: 0.1, y: 0.1, z: 0.1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 3712323545636630439}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1995665098
 GameObject:
   m_ObjectHideFlags: 0
@@ -3035,6 +3099,8 @@ GameObject:
   - component: {fileID: 3712323545636630439}
   - component: {fileID: 153425867895545685}
   - component: {fileID: 3226249172184329957}
+  - component: {fileID: 3712323545636630440}
+  - component: {fileID: 3712323545636630441}
   m_Layer: 0
   m_Name: Top_Turret
   m_TagString: Untagged
@@ -3130,7 +3196,7 @@ GameObject:
   - component: {fileID: 3248716857185682647}
   m_Layer: 0
   m_Name: Classic Tank (With Two Parts)
-  m_TagString: Untagged
+  m_TagString: Tank
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -3213,9 +3279,52 @@ Transform:
   m_LocalPosition: {x: 0.14648768, y: 0.42691696, z: -0.13990098}
   m_LocalScale: {x: 10, y: 10, z: 10}
   m_ConstrainProportionsScale: 0
-  m_Children: []
+  m_Children:
+  - {fileID: 895604376}
+  - {fileID: 1898964453}
   m_Father: {fileID: 1006729712566235427}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &3712323545636630440
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 624089150447404506}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ea66adb5f8f360c46b2d41474456de3e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TurretController
+  turretYaw: {fileID: 3712323545636630439}
+  yawPivot: {fileID: 895604376}
+  pivotOffset: {x: 0, y: 0, z: 0}
+  barrelPitch: {fileID: 0}
+  sensitivity: 1.5
+  yawSpeed: 1
+  pitchSpeed: 1
+  maxYawAngle: 30
+  minPitch: -5
+  maxPitch: 45
+  invertY: 0
+  lockCursorOnStart: 1
+  initialAimIgnoreSeconds: 0.05
+--- !u!114 &3712323545636630441
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 624089150447404506}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4274128a83c34244a8b600affc6b53d3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GunController
+  muzzle: {fileID: 1898964453}
+  projectilePrefab: {fileID: 6308913157749764210, guid: 40ccb8cbc61484c45abb0ecd9f3f4f17, type: 3}
+  fireForce: 1500
+  fireRate: 2
 --- !u!1 &7362841083029716441
 GameObject:
   m_ObjectHideFlags: 0
