@@ -31,7 +31,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0.45035, y: 1.15675, z: -7.36486}
-  m_LocalScale: {x: 0.29289, y: 0.29289, z: 0.29289}
+  m_LocalScale: {x: 0.18136874, y: 0.18136874, z: 0.18136874}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
@@ -152,6 +152,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cbe1b2deed085ac4690080b3f63a963d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Projectile
-  lifetime: 20
+  lifetime: 5000
+  armingTime: 0.5
   damage: 1
   targetTag: Tank

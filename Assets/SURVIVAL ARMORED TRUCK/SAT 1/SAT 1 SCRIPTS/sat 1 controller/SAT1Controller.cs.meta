@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 76455163d96063a488ea64a9df23a048
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 312911
+  packageName: Survival Armored truck
+  packageVersion: 1.0.2
+  assetPath: Assets/SURVIVAL ARMORED TRUCK/SAT 1/SAT 1 SCRIPTS/sat 1 controller/SAT1Controller.cs
+  uploadId: 772016

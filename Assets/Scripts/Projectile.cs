@@ -7,41 +7,52 @@ using UnityEngine;
 [DisallowMultipleComponent]
 public class Projectile : MonoBehaviour
 {
-    public float lifetime = 5f;
-    public int damage = 1;
+    [Tooltip("Seconds before this projectile is automatically destroyed.")]
+        public float lifetime = 5f;
 
-    // Optional tag check; if the hit object has this tag, it's counted as a destroyed tank.
-    // Set to "Tank" or "Enemy" depending on your scene. Leave empty to skip.
+    [Tooltip("Time after spawn during which collisions are ignored (arming time).")]
+    public float armingTime = 0.05f;
+
+    public int damage = 1;
     public string targetTag = "Tank";
+
+    private float spawnTime;
 
     void Start()
     {
+        spawnTime = Time.time;
+        Debug.Log($"[Projectile] Spawned '{name}' lifetime={lifetime} armingTime={armingTime} at {spawnTime}", gameObject);
         Destroy(gameObject, lifetime);
     }
 
     void OnCollisionEnter(Collision collision)
     {
+        // If still within arming time, ignore this collision (prevents immediate self-hit)
+        if (Time.time < spawnTime + armingTime)
+        {
+            Debug.Log($"[Projectile] Ignoring collision during arming: {name} with {collision.collider.gameObject.name}", gameObject);
+            return;
+        }
+
         var other = collision.collider;
         if (other == null)
         {
+            Debug.Log($"[Projectile] Collided with null at {Time.time}", gameObject);
             Destroy(gameObject);
             return;
         }
 
-        // If the hit object is a tank (by tag) notify Game_State and optionally apply behavior.
+        // Log what we hit for debugging
+        Debug.Log($"[Projectile] '{name}' collided with '{other.gameObject.name}' (tag='{other.gameObject.tag}') at {Time.time}", gameObject);
+
         if (!string.IsNullOrEmpty(targetTag) && other.CompareTag(targetTag))
         {
-            // Example: increment destroyed counter. If you want to remove the tank or reduce lives,
-            // do it here (call Game_State.Instance.LoseLife(...) or destroy the tank).
             if (Game_State.Instance != null)
             {
                 Game_State.Instance.AddTanksDestroyed(1);
-                // Optionally: also reduce player lives or damage the tank if appropriate.
-                // Game_State.Instance.LoseLife(1);
             }
         }
 
-        // Destroy projectile on any collision
         Destroy(gameObject);
     }
 }

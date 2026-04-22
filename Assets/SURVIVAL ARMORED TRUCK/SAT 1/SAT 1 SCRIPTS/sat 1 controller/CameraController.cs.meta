@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 2bbbc67c7607e4e4499152f341f38fde
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 312911
+  packageName: Survival Armored truck
+  packageVersion: 1.0.2
+  assetPath: Assets/SURVIVAL ARMORED TRUCK/SAT 1/SAT 1 SCRIPTS/sat 1 controller/CameraController.cs
+  uploadId: 772016
