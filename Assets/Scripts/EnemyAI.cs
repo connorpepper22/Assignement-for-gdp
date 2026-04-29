@@ -35,6 +35,15 @@ public class EnemyAI : MonoBehaviour
     [Tooltip("When colliding with the player the agent will pause. Resume chasing when player is this far away or more.")]
     public float resumeDistanceAfterCollision = 5f;
 
+    [Header("Collision response (tuning)")]
+    [Tooltip("Multiplier applied to the player's velocity immediately after collision (0..1). Lower = less knockback.")]
+    [Range(0f, 1f)]
+    public float collisionDampFactor = 0.25f;
+    [Tooltip("Clamp upward (Y) velocity on the player after collision to prevent launching.")]
+    public float maxCollisionUpwardVelocity = 2f;
+    [Tooltip("Clamp total player speed after collision.")]
+    public float maxCollisionSpeed = 6f;
+
     [Header("Misc")]
     [Tooltip("How close to a patrol point before moving to the next")]
     public float waypointTolerance = 0.5f;
@@ -51,10 +60,6 @@ public class EnemyAI : MonoBehaviour
     // cached components
     private Rigidbody rb;
     private Component sync; // optional sync component (toggled via reflection)
-
-    // saved rigidbody state for restore
-    private bool savedKinematic = false;
-    private RigidbodyConstraints savedConstraints = RigidbodyConstraints.None;
 
     void Awake()
     {
@@ -260,29 +265,33 @@ public class EnemyAI : MonoBehaviour
             {
                 agent.isStopped = true;
                 agent.ResetPath();
+                // zero velocity if available (softly supported across versions)
 #if UNITY_2019_1_OR_NEWER
-                // zero velocity if available
                 agent.velocity = Vector3.zero;
 #endif
-                // disable agent to be extra sure it won't move transform
-                agent.enabled = false;
             }
+
+            // disable agent to be extra sure it won't move transform
+            if (agent != null) agent.enabled = false;
 
             // Disable the sync component so FixedUpdate won't force movement (if present)
             SetSyncEnabled(false);
 
-            // Save and freeze rigidbody to prevent physics movement
-            if (rb != null)
+            // DAMP player rigidbody (so player doesn't fly off)
+            Rigidbody playerRb = collision.collider.attachedRigidbody;
+            if (playerRb == null) playerRb = collision.collider.GetComponentInParent<Rigidbody>();
+            if (playerRb != null)
             {
-                savedKinematic = rb.isKinematic;
-                savedConstraints = rb.constraints;
+                // Damp existing velocity and clamp
+                Vector3 newVel = playerRb.linearVelocity * collisionDampFactor;
+                float mag = newVel.magnitude;
+                if (mag > maxCollisionSpeed) newVel = newVel.normalized * maxCollisionSpeed;
 
-                rb.linearVelocity = Vector3.zero;
-                rb.angularVelocity = Vector3.zero;
+                if (newVel.y > maxCollisionUpwardVelocity)
+                    newVel.y = maxCollisionUpwardVelocity;
 
-                // Freeze physics movement while paused
-                rb.isKinematic = true;
-                rb.constraints = RigidbodyConstraints.FreezeAll;
+                playerRb.linearVelocity = newVel;
+                playerRb.angularVelocity *= collisionDampFactor;
             }
 
             Debug.Log("[EnemyAI] Paused chasing due to collision with Player", gameObject);
@@ -315,20 +324,11 @@ public class EnemyAI : MonoBehaviour
         }
     }
 
-    // Restore rigidbody and agent when unpausing
+    // Restore agent and sync when unpausing
     private void SetPausedState(bool paused)
     {
         if (!paused)
         {
-            // restore rigidbody
-            if (rb != null)
-            {
-                rb.constraints = savedConstraints;
-                rb.isKinematic = savedKinematic;
-                rb.linearVelocity = Vector3.zero;
-                rb.angularVelocity = Vector3.zero;
-            }
-
             // re-enable sync and agent
             SetSyncEnabled(true);
             if (agent != null)

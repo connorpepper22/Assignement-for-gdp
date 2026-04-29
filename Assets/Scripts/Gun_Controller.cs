@@ -29,6 +29,22 @@ public class GunController : MonoBehaviour
     [Tooltip("Small forward offset to avoid spawning inside the gun/tank collider")]
     public float spawnOffset = 0.5f;
 
+    [Header("Audio (optional)")]
+    [Tooltip("Clip to play when firing")]
+    public AudioClip fireClip;
+    [Tooltip("AudioSource used to play the fire clip. If null, PlayClipAtPoint will be used.")]
+    public AudioSource audioSource;
+    [Range(0f, 1f)]
+    public float fireVolume = 1f;
+
+    [Header("Muzzle VFX (optional)")]
+    [Tooltip("If assigned, this ParticleSystem (child on muzzle) will be played when firing.")]
+    public ParticleSystem muzzleParticle; // optional pre-placed particle system
+    [Tooltip("If assigned, this prefab will be instantiated at muzzle when firing (one-shot VFX).")]
+    public GameObject muzzleVFXPrefab;
+    [Tooltip("How long to keep instantiated muzzle VFX before destroying it (0 = use particle system's lifetime)")]
+    public float muzzleVFXLifetime = 2f;
+
     // Input action for fire (left mouse / gamepad trigger)
     private InputAction fireAction;
 
@@ -75,8 +91,35 @@ public class GunController : MonoBehaviour
         else
             Debug.Log($"[GunController] Spawned projectile '{go.name}' (no Projectile component found)", go);
 
+        // --- Handle Audio ---
+        if (fireClip != null)
+        {
+            if (audioSource != null)
+            {
+                audioSource.PlayOneShot(fireClip, fireVolume);
+            }
+            else
+            {
+                AudioSource.PlayClipAtPoint(fireClip, muzzle.position, fireVolume);
+            }
+        }
+
+        // --- Handle Muzzle VFX ---
+        if (muzzleParticle != null)
+        {
+            muzzleParticle.Play();
+        }
+
+        if (muzzleVFXPrefab != null)
+        {
+            GameObject vfx = Instantiate(muzzleVFXPrefab, muzzle.position, muzzle.rotation);
+            if (muzzleVFXLifetime > 0f)
+            {
+                Destroy(vfx, muzzleVFXLifetime);
+            }
+        }
+
         // Prevent immediate collision between projectile and the shooter:
-        // Gather colliders on the shooter's root (parent) or this object and ignore collisions.
         Collider[] ownerCols = null;
         var rootRb = GetComponentInParent<Rigidbody>();
         if (rootRb != null)
@@ -96,12 +139,11 @@ public class GunController : MonoBehaviour
             StartCoroutine(ReenableCollisions(projCols, ownerCols, 0.1f));
         }
 
-        // Set projectile velocity directly (predictable, no huge impulses)
+        // Set projectile velocity directly
         var rb = go.GetComponent<Rigidbody>();
         if (rb != null)
         {
             rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
-            // directly set velocity for consistent behaviour
             rb.linearVelocity = muzzle.forward * spawnProjectileSpeed;
         }
 

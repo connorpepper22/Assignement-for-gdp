@@ -1,22 +1,30 @@
 using UnityEngine;
 
+/// <summary>
+/// Simple smooth follow camera using only `offset` (local-space) for position
+/// and `lookOffset` (world-space) for the look target. All manual/orbit/zoom
+/// input and unused fields removed for clarity.
+/// </summary>
+[DisallowMultipleComponent]
 public class CameraFollow : MonoBehaviour
 {
-    // follow the tank
+    [Header("Target")]
     public Transform target;
 
-    // Local-space offset from the target (e.g. (0, 5, -8) places camera behind and above
+    [Header("Follow")]
+    [Tooltip("Local-space offset from the target used to compute desired camera position")]
     public Vector3 offset = new Vector3(0f, 5f, -8f);
 
-    // Smooth time for position smoothing
-    public float smoothTime = 0.1f;
+    [Tooltip("World-space additional offset applied to the look target (fine control)")]
+    public Vector3 lookOffset = new Vector3(0f, 2.5f, 0f);
 
-    // Rotation smoothing speed when looking at target
-    public float rotationSpeed = 20f;
+    [Header("Smoothing")]
+    [Tooltip("Smooth time for position smoothing")]
+    public float positionSmoothTime = 0.1f;
+    [Tooltip("Rotation smoothing factor (0..1) where larger is faster)")]
+    public float rotationSmoothTime = 0.08f;
 
-    // vertical offset for the look-at point (camera angle)
-    public float lookAtHeight = 2.5f;
-
+    // internal smoothing helper
     private Vector3 velocity = Vector3.zero;
 
     void LateUpdate()
@@ -27,11 +35,11 @@ public class CameraFollow : MonoBehaviour
         Vector3 desiredPosition = target.TransformPoint(offset);
 
         // Smoothly move the camera to the desired position
-        transform.position = Vector3.SmoothDamp(transform.position, desiredPosition, ref velocity, smoothTime);
+        transform.position = Vector3.SmoothDamp(transform.position, desiredPosition, ref velocity, positionSmoothTime);
 
         // Smoothly rotate camera to look at the target's look point
-        Vector3 lookPoint = target.position + Vector3.up * lookAtHeight;
+        Vector3 lookPoint = target.position + lookOffset;
         Quaternion desiredRotation = Quaternion.LookRotation(lookPoint - transform.position);
-        transform.rotation = Quaternion.Slerp(transform.rotation, desiredRotation, rotationSpeed * Time.deltaTime);
+        transform.rotation = Quaternion.Slerp(transform.rotation, desiredRotation, Mathf.Clamp01(Time.deltaTime / rotationSmoothTime));
     }
 }
