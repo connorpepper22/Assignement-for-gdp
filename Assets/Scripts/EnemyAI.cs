@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using UnityEngine.AI;
 
@@ -30,6 +31,10 @@ public class EnemyAI : MonoBehaviour
     [Tooltip("Distance at which the enemy gives up chase and returns to patrol/idle")]
     public float loseSightDistance = 18f;
 
+    [Header("Collision pause")]
+    [Tooltip("When colliding with the player the agent will pause. Resume chasing when player is this far away or more.")]
+    public float resumeDistanceAfterCollision = 5f;
+
     [Header("Misc")]
     [Tooltip("How close to a patrol point before moving to the next")]
     public float waypointTolerance = 0.5f;
@@ -40,9 +45,25 @@ public class EnemyAI : MonoBehaviour
     private float sqrDetectionRadius;
     private float sqrLoseSightDistance;
 
+    // paused-on-collision flag
+    private bool pausedByCollision = false;
+
+    // cached components
+    private Rigidbody rb;
+    private Component sync; // optional sync component (toggled via reflection)
+
+    // saved rigidbody state for restore
+    private bool savedKinematic = false;
+    private RigidbodyConstraints savedConstraints = RigidbodyConstraints.None;
+
     void Awake()
     {
         if (agent == null) agent = GetComponent<NavMeshAgent>();
+        rb = GetComponent<Rigidbody>();
+
+        // get the sync component by name (optional, may not exist)
+        sync = GetComponent("NavMeshAgentRigidbodySync") as Component;
+
         sqrDetectionRadius = detectionRadius * detectionRadius;
         sqrLoseSightDistance = loseSightDistance * loseSightDistance;
     }
@@ -54,6 +75,12 @@ public class EnemyAI : MonoBehaviour
             var p = GameObject.FindGameObjectWithTag("Player");
             if (p != null) playerTransform = p.transform;
         }
+
+        // Ensure agent is on NavMesh at start (best-effort)
+        EnsureAgentOnNavMesh();
+
+        // ensure sync is enabled initially
+        SetSyncEnabled(true);
 
         if (usePatrol && patrolPoints != null && patrolPoints.Length > 0)
         {
@@ -72,7 +99,25 @@ public class EnemyAI : MonoBehaviour
 
     void Update()
     {
-        // Always check for player presence and distance
+        // If collision-paused, check if we should resume
+        if (pausedByCollision && playerTransform != null)
+        {
+            float sqrDistToPlayer = (playerTransform.position - transform.position).sqrMagnitude;
+            if (sqrDistToPlayer >= resumeDistanceAfterCollision * resumeDistanceAfterCollision)
+            {
+                // resume chasing immediately when player is far enough
+                pausedByCollision = false;
+                SetPausedState(false);
+                BeginChase();
+            }
+            else
+            {
+                // keep paused; skip state updates
+                return;
+            }
+        }
+
+        // Always check for player presence and distance (unless pausedByCollision handled above)
         if (playerTransform != null)
         {
             var toPlayer = playerTransform.position - transform.position;
@@ -80,8 +125,8 @@ public class EnemyAI : MonoBehaviour
 
             if (sqrDist <= sqrDetectionRadius)
             {
-                // Spot player: start chase
-                if (state != State.Chase)
+                // Spot player: start chase if not currently chasing
+                if (state != State.Chase && !pausedByCollision)
                     BeginChase();
             }
             else if (state == State.Chase && sqrDist > sqrLoseSightDistance)
@@ -110,9 +155,18 @@ public class EnemyAI : MonoBehaviour
 
     private void BeginChase()
     {
+        // Try to ensure agent is on navmesh before chasing
+        EnsureAgentOnNavMesh();
+
+        // Ensure agent is enabled (it may have been disabled while paused)
+        if (agent != null) agent.enabled = true;
+
         state = State.Chase;
         agent.isStopped = false;
         agent.speed = chaseSpeed;
+
+        if (playerTransform != null)
+            agent.SetDestination(playerTransform.position);
     }
 
     private void UpdateChase()
@@ -123,7 +177,25 @@ public class EnemyAI : MonoBehaviour
             return;
         }
 
-        agent.SetDestination(playerTransform.position);
+        // If agent can't path, attempt to resample and set destination again
+        if (!agent.isOnNavMesh || !agent.hasPath || agent.pathStatus != NavMeshPathStatus.PathComplete)
+        {
+            Debug.LogWarning($"[EnemyAI] Agent cannot path (isOnNavMesh={agent.isOnNavMesh}, hasPath={agent.hasPath}, pathStatus={agent.pathStatus}). Trying to sample position and retry.", gameObject);
+            if (EnsureAgentOnNavMesh())
+            {
+                agent.SetDestination(playerTransform.position);
+            }
+            else
+            {
+                // if still no navmesh, do nothing this frame
+                return;
+            }
+        }
+        else
+        {
+            // Regular chase update
+            agent.SetDestination(playerTransform.position);
+        }
     }
 
     private void UpdatePatrol()
@@ -154,6 +226,124 @@ public class EnemyAI : MonoBehaviour
         }
     }
 
+    // Ensures the agent is on the NavMesh. Returns true if agent is on NavMesh after the call.
+    private bool EnsureAgentOnNavMesh()
+    {
+        if (agent == null) agent = GetComponent<NavMeshAgent>();
+        if (agent == null) return false;
+
+        if (agent.isOnNavMesh) return true;
+
+        NavMeshHit hit;
+        if (NavMesh.SamplePosition(transform.position, out hit, 2f, agent.areaMask))
+        {
+            agent.Warp(hit.position);
+            agent.nextPosition = transform.position;
+            Debug.Log($"[EnemyAI] Warped agent to NavMesh at {hit.position}", gameObject);
+            return true;
+        }
+
+        Debug.LogWarning("[EnemyAI] Could not find NavMesh near enemy. Ensure NavMesh is baked and the agent parameters match the baked agent.", gameObject);
+        return false;
+    }
+
+    // --- Collision handling: pause on contact with player, resume when player is far enough ---
+    void OnCollisionEnter(Collision collision)
+    {
+        if (collision.collider != null && collision.collider.CompareTag("Player"))
+        {
+            // Pause movement on contact
+            pausedByCollision = true;
+
+            // Stop the NavMeshAgent and clear its path so it won't move
+            if (agent != null)
+            {
+                agent.isStopped = true;
+                agent.ResetPath();
+#if UNITY_2019_1_OR_NEWER
+                // zero velocity if available
+                agent.velocity = Vector3.zero;
+#endif
+                // disable agent to be extra sure it won't move transform
+                agent.enabled = false;
+            }
+
+            // Disable the sync component so FixedUpdate won't force movement (if present)
+            SetSyncEnabled(false);
+
+            // Save and freeze rigidbody to prevent physics movement
+            if (rb != null)
+            {
+                savedKinematic = rb.isKinematic;
+                savedConstraints = rb.constraints;
+
+                rb.linearVelocity = Vector3.zero;
+                rb.angularVelocity = Vector3.zero;
+
+                // Freeze physics movement while paused
+                rb.isKinematic = true;
+                rb.constraints = RigidbodyConstraints.FreezeAll;
+            }
+
+            Debug.Log("[EnemyAI] Paused chasing due to collision with Player", gameObject);
+        }
+    }
+
+    // Reflection helper: safely set enableSync on optional sync component (if present)
+    private void SetSyncEnabled(bool enabled)
+    {
+        if (sync == null) sync = GetComponent("NavMeshAgentRigidbodySync") as Component;
+        if (sync == null) return;
+        try
+        {
+            var t = sync.GetType();
+            var f = t.GetField("enableSync");
+            if (f != null)
+            {
+                f.SetValue(sync, enabled);
+                return;
+            }
+            var p = t.GetProperty("enableSync");
+            if (p != null && p.CanWrite)
+            {
+                p.SetValue(sync, enabled, null);
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"[EnemyAI] Failed to set enableSync on sync component: {ex.Message}", gameObject);
+        }
+    }
+
+    // Restore rigidbody and agent when unpausing
+    private void SetPausedState(bool paused)
+    {
+        if (!paused)
+        {
+            // restore rigidbody
+            if (rb != null)
+            {
+                rb.constraints = savedConstraints;
+                rb.isKinematic = savedKinematic;
+                rb.linearVelocity = Vector3.zero;
+                rb.angularVelocity = Vector3.zero;
+            }
+
+            // re-enable sync and agent
+            SetSyncEnabled(true);
+            if (agent != null)
+            {
+                agent.enabled = true;
+                agent.isStopped = false;
+            }
+        }
+        else
+        {
+            // handled in OnCollisionEnter
+            pausedByCollision = true;
+        }
+    }
+
 #if UNITY_EDITOR
     void OnDrawGizmosSelected()
     {
@@ -161,6 +351,8 @@ public class EnemyAI : MonoBehaviour
         Gizmos.DrawWireSphere(transform.position, detectionRadius);
         Gizmos.color = Color.cyan;
         Gizmos.DrawWireSphere(transform.position, loseSightDistance);
+        Gizmos.color = Color.magenta;
+        Gizmos.DrawWireSphere(transform.position, resumeDistanceAfterCollision);
     }
 #endif
 }
