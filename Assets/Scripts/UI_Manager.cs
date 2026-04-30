@@ -317,6 +317,19 @@ public class UI_Manager : MonoBehaviour
         else PauseGame();
     }
 
+    // ---- Scene Management & Menu API ----
+
+    // Starts the game by loading the next scene in the Build Settings
+    public void PlayGame()
+    {
+        // Ensure time scale and audio are normal before loading the level
+        Time.timeScale = 1f;
+        AudioListener.pause = false;
+
+        // Loads the next scene in your Build Settings queue
+        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex + 1);
+    }
+
     // Restart current level (resets timescale first)
     public void RestartLevel()
     {
@@ -499,4 +512,3 @@ public class UI_Manager : MonoBehaviour
         }
     }
 }
-
