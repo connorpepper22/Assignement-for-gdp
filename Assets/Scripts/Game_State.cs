@@ -20,6 +20,12 @@ public class Game_State : MonoBehaviour
     // Tanks destroyed counter (read-only publicly)
     public int TanksDestroyed { get; private set; }
 
+    // Hull stability tracker (0f to 1f)
+    public float HullStability { get; private set; } = 1f;
+
+    // Event for the UI to listen to
+    public event Action<float> OnHullStabilityChanged;
+
     // Events:
     // - OnLivesChanged passes the new lives count
     // - OnLivesDepleted fires when lives reach zero
@@ -27,6 +33,48 @@ public class Game_State : MonoBehaviour
     public event Action<int> OnLivesChanged;
     public event Action OnLivesDepleted;
     public event Action<int> OnTanksDestroyedChanged;
+
+    [Header("Round Settings")]
+    public int totalRounds = 3;
+    public int CurrentRound { get; private set; } = 1;
+    public int EnemiesRemaining { get; private set; }
+
+    // Event for UI to show the "Round Clear" screen
+    public event Action OnRoundCleared;
+    public event Action<int> OnRoundChanged;
+
+    // Call this at the start of a round to set the enemy count
+    public void RegisterEnemies(int count)
+    {
+        EnemiesRemaining = count;
+    }
+
+    // Called by EnemyHealth when an enemy dies
+    public void EnemyDestroyed()
+    {
+        EnemiesRemaining--;
+        AddTanksDestroyed(1); // Keep your existing score logic
+
+        if (EnemiesRemaining <= 0)
+        {
+            OnRoundCleared?.Invoke();
+        }
+    }
+
+    // Called by the "Continue" button on your UI
+    public void AdvanceRound()
+    {
+        if (CurrentRound < totalRounds)
+        {
+            CurrentRound++;
+            OnRoundChanged?.Invoke(CurrentRound);
+            // You could also trigger an enemy spawner here!
+        }
+        else
+        {
+            Debug.Log("All Rounds Complete! Show Victory Screen?");
+        }
+    }
 
     void Awake()
     {
@@ -113,5 +161,14 @@ public class Game_State : MonoBehaviour
     public void ResetTanksDestroyed()
     {
         SetTanksDestroyed(0);
+    }
+
+    /// <summary>
+    /// Update the hull stability percentage (0.0 to 1.0) and notify listeners.
+    /// </summary>
+    public void UpdateHullStability(float percentage)
+    {
+        HullStability = Mathf.Clamp01(percentage);
+        OnHullStabilityChanged?.Invoke(HullStability);
     }
 }

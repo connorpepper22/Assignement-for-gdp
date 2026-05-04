@@ -2,8 +2,7 @@ using UnityEngine;
 
 /// <summary>
 /// Simple smooth follow camera using only `offset` (local-space) for position
-/// and `lookOffset` (world-space) for the look target. All manual/orbit/zoom
-/// input and unused fields removed for clarity.
+/// and `lookOffset` (world-space) for the look target. 
 /// </summary>
 [DisallowMultipleComponent]
 public class CameraFollow : MonoBehaviour
@@ -41,5 +40,24 @@ public class CameraFollow : MonoBehaviour
         Vector3 lookPoint = target.position + lookOffset;
         Quaternion desiredRotation = Quaternion.LookRotation(lookPoint - transform.position);
         transform.rotation = Quaternion.Slerp(transform.rotation, desiredRotation, Mathf.Clamp01(Time.deltaTime / rotationSmoothTime));
+    }
+
+    /// <summary>
+    /// Instantly teleports the camera to its proper place behind the target.
+    /// Call this immediately after respawning the player!
+    /// </summary>
+    public void SnapToTarget()
+    {
+        if (target == null) return;
+
+        // Instantly jump position
+        transform.position = target.TransformPoint(offset);
+
+        // Instantly snap rotation
+        Vector3 lookPoint = target.position + lookOffset;
+        transform.rotation = Quaternion.LookRotation(lookPoint - transform.position);
+
+        // Kill any leftover smoothing momentum
+        velocity = Vector3.zero;
     }
 }

@@ -119,26 +119,6 @@ public class GunController : MonoBehaviour
             }
         }
 
-        // Prevent immediate collision between projectile and the shooter:
-        Collider[] ownerCols = null;
-        var rootRb = GetComponentInParent<Rigidbody>();
-        if (rootRb != null)
-            ownerCols = rootRb.GetComponentsInChildren<Collider>();
-        else
-            ownerCols = GetComponentsInChildren<Collider>();
-
-        var projCols = go.GetComponentsInChildren<Collider>();
-        if (projCols.Length > 0 && ownerCols.Length > 0)
-        {
-            foreach (var pc in projCols)
-                foreach (var oc in ownerCols)
-                    if (pc != null && oc != null)
-                        Physics.IgnoreCollision(pc, oc, true);
-
-            // Re-enable collisions after a short delay so projectile can hit things later
-            StartCoroutine(ReenableCollisions(projCols, ownerCols, 0.1f));
-        }
-
         // Set projectile velocity directly
         var rb = go.GetComponent<Rigidbody>();
         if (rb != null)
@@ -148,14 +128,5 @@ public class GunController : MonoBehaviour
         }
 
         nextFireTime = Time.time + fireRate;
-    }
-
-    private IEnumerator ReenableCollisions(Collider[] projCols, Collider[] ownerCols, float delay)
-    {
-        yield return new WaitForSeconds(delay);
-        foreach (var pc in projCols)
-            foreach (var oc in ownerCols)
-                if (pc != null && oc != null)
-                    Physics.IgnoreCollision(pc, oc, false);
     }
 }

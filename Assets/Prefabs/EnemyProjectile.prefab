@@ -15,9 +15,9 @@ GameObject:
   - component: {fileID: -7505025545044840208}
   - component: {fileID: -2301241975999235171}
   - component: {fileID: -6895500714936557050}
-  m_Layer: 0
-  m_Name: Projectile
-  m_TagString: Untagged
+  m_Layer: 9
+  m_Name: EnemyProjectile
+  m_TagString: Player
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -31,8 +31,8 @@ Transform:
   m_GameObject: {fileID: 6308913157749764210}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.45035, y: 1.15675, z: -7.36486}
-  m_LocalScale: {x: 0.18136874, y: 0.18136874, z: 0.18136874}
+  m_LocalPosition: {x: 0.45035, y: 1.15675, z: -6.7771}
+  m_LocalScale: {x: 0.06380915, y: 0.06380915, z: 0.06380915}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
@@ -44,7 +44,7 @@ MeshFilter:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 6308913157749764210}
-  m_Mesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
+  m_Mesh: {fileID: 0}
 --- !u!23 &5013549590949372174
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -70,7 +70,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 73c176f402d2c2f4d929aa5da7585d17, type: 2}
+  - {fileID: 0}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -154,9 +154,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Projectile
   lifetime: 5000
-  armingTime: 0.5
+  armingTime: 0
   damage: 1
-  targetTag: Tank
+  targetTag: Player
 --- !u!114 &-6895500714936557050
 MonoBehaviour:
   m_ObjectHideFlags: 0

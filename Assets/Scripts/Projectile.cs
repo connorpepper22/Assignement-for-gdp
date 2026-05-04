@@ -6,9 +6,10 @@ using UnityEngine;
 /// </summary>
 [DisallowMultipleComponent]
 public class Projectile : MonoBehaviour
-{
+{ // <-- This opening brace was also missing!
+
     [Tooltip("Seconds before this projectile is automatically destroyed.")]
-        public float lifetime = 5f;
+    public float lifetime = 5f;
 
     [Tooltip("Time after spawn during which collisions are ignored (arming time).")]
     public float armingTime = 0.05f;
@@ -47,9 +48,18 @@ public class Projectile : MonoBehaviour
 
         if (!string.IsNullOrEmpty(targetTag) && other.CompareTag(targetTag))
         {
-            if (Game_State.Instance != null)
+            // 1. Try to damage an Enemy
+            EnemyHealth enemy = other.gameObject.GetComponentInParent<EnemyHealth>();
+            if (enemy != null)
             {
-                Game_State.Instance.AddTanksDestroyed(1);
+                enemy.TakeDamage(damage);
+            }
+
+            // 2. Try to damage the Player
+            PlayerHealth player = other.gameObject.GetComponentInParent<PlayerHealth>();
+            if (player != null)
+            {
+                player.TakeDamage(damage);
             }
         }
 
