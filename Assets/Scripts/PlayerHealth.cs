@@ -8,6 +8,10 @@ public class PlayerHealth : MonoBehaviour
     public int maxHealth = 4;
     private int currentHealth;
 
+    // NEW: Armor System
+    [Header("Armor Settings")]
+    public int currentArmor = 0;
+
     [Header("Respawn Settings")]
     public float respawnDelay = 2f;
 
@@ -24,26 +28,79 @@ public class PlayerHealth : MonoBehaviour
 
     void Start()
     {
-        currentHealth = maxHealth; UpdateHealthUI();
+        currentHealth = maxHealth;
+        currentArmor = 0; // Start with no extra armor
+        UpdateHealthUI();
+
         rb = GetComponent<Rigidbody>();
         controller = GetComponent<Player_Controller>();
 
-        // Grab all child colliders and renderers (the tank body, turret, etc.)
+        // Grab all child colliders and renderers
         colliders = GetComponentsInChildren<Collider>();
         renderers = GetComponentsInChildren<Renderer>();
     }
 
+    // UPDATE: Armor takes damage before Hull
     public void TakeDamage(int damageAmount)
     {
         if (currentHealth <= 0) return; // Already dead, ignore extra bullets
 
-        currentHealth -= damageAmount; UpdateHealthUI();
-        Debug.Log($"[PlayerHealth] Player took {damageAmount} damage! Current Health: {currentHealth}");
+        // NEW: Tell the Game State we took a hit to trigger the UI red flash!
+        if (Game_State.Instance != null) Game_State.Instance.NotifyPlayerDamaged();
+
+        // 1. Armor takes the hit first
+        if (currentArmor > 0)
+        {
+            // Figure out how much the armor can absorb
+            int damageToArmor = Mathf.Min(currentArmor, damageAmount);
+            currentArmor -= damageToArmor;
+            damageAmount -= damageToArmor;
+
+            Debug.Log($"[PlayerHealth] Armor absorbed {damageToArmor} damage! Armor remaining: {currentArmor}");
+        }
+
+        // 2. If there is still damage left over, hit the hull
+        if (damageAmount > 0)
+        {
+            currentHealth -= damageAmount;
+            Debug.Log($"[PlayerHealth] Hull took {damageAmount} damage! Health remaining: {currentHealth}");
+        }
+
+        UpdateHealthUI();
 
         if (currentHealth <= 0)
         {
             Die();
         }
+    }
+
+    // NEW: Health Pickup Logic
+    public void Heal(int healAmount)
+    {
+        currentHealth += healAmount;
+        if (currentHealth > maxHealth)
+        {
+            currentHealth = maxHealth; // Prevent overhealing the hull
+        }
+
+        UpdateHealthUI();
+        Debug.Log($"[PlayerHealth] Healed! Current Health: {currentHealth}");
+    }
+
+    // NEW: Armor Pickup Logic
+    public void AddArmor(int armorAmount)
+    {
+        currentArmor += armorAmount;
+        Debug.Log($"[PlayerHealth] Armor Module equipped! Current Armor: {currentArmor}");
+
+        // NEW: Tell the Game State to trigger the UI!
+        if (Game_State.Instance != null) Game_State.Instance.NotifyArmorPickedUp();
+    }
+
+    // NEW: Helper so we don't accidentally consume health packs when full
+    public bool IsAtMaxHealth()
+    {
+        return currentHealth >= maxHealth;
     }
 
     private void Die()
@@ -68,13 +125,15 @@ public class PlayerHealth : MonoBehaviour
         // Wait for the respawn delay so the player can watch the explosion
         yield return new WaitForSeconds(respawnDelay);
 
-        // Tell the Game_State we lost a life. 
-        // THIS triggers the RoundManager to teleport the player to the correct Area!
+        // Heal up FIRST and strip away any broken armor
+        currentHealth = maxHealth;
+        currentArmor = 0;
+        UpdateHealthUI();
+
+        // Check lives
         if (Game_State.Instance != null)
         {
             Game_State.Instance.LoseLife(1);
-
-            // Stop here if we got a Game Over
             if (Game_State.Instance.Lives <= 0)
             {
                 Debug.Log("GAME OVER!");
@@ -82,28 +141,42 @@ public class PlayerHealth : MonoBehaviour
             }
         }
 
-        // Kill any leftover physics momentum from the explosion/death
-        if (rb != null)
+        // --- THE BULLETPROOF TELEPORT ---
+        // Find the RoundManager and ask it for the safe zone coordinates
+        RoundManager rm = FindObjectOfType<RoundManager>();
+        if (rm != null)
         {
-            rb.linearVelocity = Vector3.zero;
-            rb.angularVelocity = Vector3.zero;
+            Transform safeZone = rm.GetCurrentSpawnPoint();
+            if (safeZone != null)
+            {
+                // 1. Move the raw transform
+                transform.position = safeZone.position;
+                transform.rotation = safeZone.rotation;
+
+                // 2. Force the Rigidbody to perfectly match, and kill all momentum
+                if (rb != null)
+                {
+                    rb.position = safeZone.position;
+                    rb.rotation = safeZone.rotation;
+                    rb.linearVelocity = Vector3.zero;
+                    rb.angularVelocity = Vector3.zero;
+                }
+
+                // 3. FORCE Unity's physics engine to register the new location immediately!
+                Physics.SyncTransforms();
+            }
         }
+        // --------------------------------
 
-        // Heal up
-        currentHealth = maxHealth;
-        UpdateHealthUI();
-
-        // "Show" the player again
+        // "Show" the player again ONLY AFTER the teleport is 100% finished
         SetPlayerActive(true);
 
-        // Snap the camera so it doesn't fly across the map during the teleport
+        // Snap the camera safely to the new spawn location
         CameraFollow cam = Camera.main.GetComponent<CameraFollow>();
         if (cam != null)
         {
             cam.SnapToTarget();
         }
-
-        Debug.Log("[PlayerHealth] Player Respawn Sequence Completed!");
     }
 
     // Helper method to toggle the player's presence in the world
@@ -120,7 +193,6 @@ public class PlayerHealth : MonoBehaviour
     {
         if (Game_State.Instance != null)
         {
-            // Calculate percentage (e.g., 3 / 4 = 0.75f)
             float healthPercent = (float)currentHealth / maxHealth;
             Game_State.Instance.UpdateHullStability(healthPercent);
         }

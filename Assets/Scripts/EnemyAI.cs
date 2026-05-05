@@ -44,6 +44,12 @@ public class EnemyAI : MonoBehaviour
     [Tooltip("Clamp total player speed after collision.")]
     public float maxCollisionSpeed = 6f;
 
+    [Header("Pitch/Slope Settings")]
+    [Tooltip("How fast the enemy tilts to match the ground.")]
+    public float pitchAdjustmentSpeed = 5f;
+    [Tooltip("How far down to look for the ground.")]
+    public float groundCheckDistance = 1.5f;
+
     [Header("Misc")]
     [Tooltip("How close to a patrol point before moving to the next")]
     public float waypointTolerance = 0.5f;
@@ -66,6 +72,12 @@ public class EnemyAI : MonoBehaviour
         if (agent == null) agent = GetComponent<NavMeshAgent>();
         rb = GetComponent<Rigidbody>();
 
+        // Allow the Rigidbody to Pitch (X rotation) but freeze Roll (Z rotation) to stop tipping
+        if (rb != null)
+        {
+            rb.constraints = RigidbodyConstraints.FreezeRotationZ;
+        }
+
         // get the sync component by name (optional, may not exist)
         sync = GetComponent("NavMeshAgentRigidbodySync") as Component;
 
@@ -75,11 +87,8 @@ public class EnemyAI : MonoBehaviour
 
     void Start()
     {
-        if (playerTransform == null)
-        {
-            var p = GameObject.FindGameObjectWithTag("Player");
-            if (p != null) playerTransform = p.transform;
-        }
+        // Try to find the player on boot (might fail if player is currently respawning/hidden)
+        TryFindPlayer();
 
         // Ensure agent is on NavMesh at start (best-effort)
         EnsureAgentOnNavMesh();
@@ -104,6 +113,15 @@ public class EnemyAI : MonoBehaviour
 
     void Update()
     {
+        // NEW: If we don't have a target (e.g. they were respawning when we booted up), keep looking!
+        if (playerTransform == null)
+        {
+            TryFindPlayer();
+
+            // If the player is STILL hidden, don't run the rest of the logic this frame
+            if (playerTransform == null) return;
+        }
+
         // If collision-paused, check if we should resume
         if (pausedByCollision && playerTransform != null)
         {
@@ -155,6 +173,50 @@ public class EnemyAI : MonoBehaviour
             case State.Chase:
                 UpdateChase();
                 break;
+        }
+    }
+
+    // --- NEW: LATE UPDATE FOR PITCH ---
+    // We use LateUpdate because the NavMeshAgent calculates its steering in Update.
+    // This allows us to overwrite the Agent's "flat" rotation right before the frame is rendered!
+    void LateUpdate()
+    {
+        ApplySlopeAlignment();
+    }
+
+    private void ApplySlopeAlignment()
+    {
+        RaycastHit hit;
+        // Shoot a ray from slightly above the center of the tank downward
+        if (Physics.Raycast(transform.position + Vector3.up * 0.5f, Vector3.down, out hit, groundCheckDistance))
+        {
+            Vector3 groundNormal = hit.normal;
+
+            // Get the forward direction the NavMeshAgent is trying to face
+            Vector3 currentForward = transform.forward;
+
+            // Project it onto the slope
+            Vector3 forwardOnSlope = Vector3.ProjectOnPlane(currentForward, groundNormal);
+
+            if (forwardOnSlope != Vector3.zero)
+            {
+                // Calculate target rotation keeping the Yaw but adding Pitch
+                Quaternion slopeRotation = Quaternion.LookRotation(forwardOnSlope, groundNormal);
+
+                // Smoothly Slerp the transform's rotation to match the hill
+                transform.rotation = Quaternion.Slerp(transform.rotation, slopeRotation, Time.deltaTime * pitchAdjustmentSpeed);
+            }
+        }
+    }
+
+    // NEW: A dedicated helper method to safely look for the player
+    private void TryFindPlayer()
+    {
+        GameObject p = GameObject.FindGameObjectWithTag("Player");
+        if (p != null)
+        {
+            playerTransform = p.transform;
+            Debug.Log("[EnemyAI] Target Acquired!", gameObject);
         }
     }
 
@@ -244,11 +306,9 @@ public class EnemyAI : MonoBehaviour
         {
             agent.Warp(hit.position);
             agent.nextPosition = transform.position;
-            Debug.Log($"[EnemyAI] Warped agent to NavMesh at {hit.position}", gameObject);
             return true;
         }
 
-        Debug.LogWarning("[EnemyAI] Could not find NavMesh near enemy. Ensure NavMesh is baked and the agent parameters match the baked agent.", gameObject);
         return false;
     }
 
@@ -260,11 +320,12 @@ public class EnemyAI : MonoBehaviour
             // Pause movement on contact
             pausedByCollision = true;
 
-            // Stop the NavMeshAgent and clear its path so it won't move
-            if (agent != null)
+            // SAFETY CHECK: Only give NavMesh commands if the agent is fully awake and on the floor!
+            if (agent != null && agent.isActiveAndEnabled && agent.isOnNavMesh)
             {
                 agent.isStopped = true;
                 agent.ResetPath();
+
                 // zero velocity if available (softly supported across versions)
 #if UNITY_2019_1_OR_NEWER
                 agent.velocity = Vector3.zero;
@@ -293,8 +354,6 @@ public class EnemyAI : MonoBehaviour
                 playerRb.linearVelocity = newVel;
                 playerRb.angularVelocity *= collisionDampFactor;
             }
-
-            Debug.Log("[EnemyAI] Paused chasing due to collision with Player", gameObject);
         }
     }
 

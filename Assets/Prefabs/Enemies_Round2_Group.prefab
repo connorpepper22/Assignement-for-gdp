@@ -53,6 +53,14 @@ PrefabInstance:
       propertyPath: m_TagString
       value: Enemy
       objectReference: {fileID: 0}
+    - target: {fileID: 3479455463330566344, guid: a16622237d741654190bc99f8ee6de52, type: 3}
+      propertyPath: m_Convex
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3914982255329652918, guid: a16622237d741654190bc99f8ee6de52, type: 3}
+      propertyPath: m_Convex
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 4169457762491581081, guid: a16622237d741654190bc99f8ee6de52, type: 3}
       propertyPath: m_LocalPosition.x
       value: 63.60564
@@ -93,6 +101,14 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 6154458709361553063, guid: a16622237d741654190bc99f8ee6de52, type: 3}
+      propertyPath: m_Convex
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8786063374546038332, guid: a16622237d741654190bc99f8ee6de52, type: 3}
+      propertyPath: m_Convex
+      value: 1
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -122,6 +138,14 @@ PrefabInstance:
     - target: {fileID: 3473055488071016264, guid: a16622237d741654190bc99f8ee6de52, type: 3}
       propertyPath: m_TagString
       value: Enemy
+      objectReference: {fileID: 0}
+    - target: {fileID: 3479455463330566344, guid: a16622237d741654190bc99f8ee6de52, type: 3}
+      propertyPath: m_Convex
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3914982255329652918, guid: a16622237d741654190bc99f8ee6de52, type: 3}
+      propertyPath: m_Convex
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 4169457762491581081, guid: a16622237d741654190bc99f8ee6de52, type: 3}
       propertyPath: m_LocalPosition.x
@@ -162,6 +186,14 @@ PrefabInstance:
     - target: {fileID: 4169457762491581081, guid: a16622237d741654190bc99f8ee6de52, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6154458709361553063, guid: a16622237d741654190bc99f8ee6de52, type: 3}
+      propertyPath: m_Convex
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8786063374546038332, guid: a16622237d741654190bc99f8ee6de52, type: 3}
+      propertyPath: m_Convex
+      value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

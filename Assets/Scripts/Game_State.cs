@@ -34,6 +34,9 @@ public class Game_State : MonoBehaviour
     public event Action OnLivesDepleted;
     public event Action<int> OnTanksDestroyedChanged;
 
+    // NEW: Armor pickup event
+    public event Action OnArmorPickedUp;
+
     [Header("Round Settings")]
     public int totalRounds = 3;
     public int CurrentRound { get; private set; } = 1;
@@ -88,6 +91,20 @@ public class Game_State : MonoBehaviour
         Instance = this;
         Lives = Mathf.Max(0, startingLives);
         TanksDestroyed = 0;
+    }
+
+    // NEW: Call this to trigger the armor UI
+    public void NotifyArmorPickedUp()
+    {
+        OnArmorPickedUp?.Invoke();
+    }
+
+    // NEW: Player took damage event
+    public event Action OnPlayerDamaged;
+
+    public void NotifyPlayerDamaged()
+    {
+        OnPlayerDamaged?.Invoke();
     }
 
     /// <summary>

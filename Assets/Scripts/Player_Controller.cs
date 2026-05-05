@@ -4,33 +4,37 @@ using UnityEngine.InputSystem;
 [RequireComponent(typeof(Rigidbody))]
 public class Player_Controller : MonoBehaviour
 {
-    // Movement speed in units per second
+    [Header("Movement Settings")]
     public float speed = 3f;
-
-    // Rotation speed in degrees per second
     public float rotationSpeed = 120f;
 
-    // Cached Rigidbody (the tank main body)
-    private Rigidbody rb;
+    [Header("Pitch/Slope Settings")]
+    [Tooltip("How fast the tank tilts to match the ground.")]
+    public float pitchAdjustmentSpeed = 5f;
+    [Tooltip("How far down to look for the ground.")]
+    public float groundCheckDistance = 1.5f;
 
-    // Input Action for movement
+    [Header("Audio")]
+    private AudioSource engineAudio;
+
+    private Rigidbody rb;
     private InputAction moveAction;
 
     void Awake()
     {
         rb = GetComponent<Rigidbody>();
+        engineAudio = GetComponent<AudioSource>(); // Grab the audio source here!
+
         rb.isKinematic = false;
 
-        // Keep the tank upright and allow positional movement
-        rb.constraints &= ~RigidbodyConstraints.FreezePositionX;
-        rb.constraints &= ~RigidbodyConstraints.FreezePositionY;
-        rb.constraints &= ~RigidbodyConstraints.FreezePositionZ;
-        rb.constraints |= RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
+        // --- UPDATE: UNFREEZE X ROTATION ---
+        // We keep FreezeRotationZ (Roll) so the tank doesn't tip sideways.
+        // We unfreeze FreezeRotationX so the tank can pitch up/down.
+        rb.constraints = RigidbodyConstraints.FreezeRotationZ;
 
         rb.interpolation = RigidbodyInterpolation.Interpolate;
         rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
 
-        // Build a simple Move action: WASD / arrows / gamepad left stick
         moveAction = new InputAction("Move", InputActionType.Value);
         moveAction.AddCompositeBinding("2DVector")
             .With("up", "<Keyboard>/w")
@@ -45,16 +49,8 @@ public class Player_Controller : MonoBehaviour
         moveAction.AddBinding("<Gamepad>/leftStick");
     }
 
-    void OnEnable()
-    {
-        moveAction?.Enable();
-    }
-
-    void OnDisable()
-    {
-        moveAction?.Disable();
-    }
-
+    void OnEnable() => moveAction?.Enable();
+    void OnDisable() => moveAction?.Disable();
     void OnDestroy()
     {
         moveAction?.Disable();
@@ -72,19 +68,64 @@ public class Player_Controller : MonoBehaviour
         if (Mathf.Abs(move) > 0.001f || Mathf.Abs(turn) > 0.001f)
             rb.WakeUp();
 
-        Vector3 forward = transform.forward;
-        Vector3 movement = forward * (move * speed * Time.fixedDeltaTime);
+        // 1. Handle Movement (Position)
+        Vector3 movement = transform.forward * (move * speed * Time.fixedDeltaTime);
         rb.MovePosition(rb.position + movement);
 
-        float turnAngle = turn * rotationSpeed * Time.fixedDeltaTime;
-        if (Mathf.Abs(turnAngle) > 0.0001f)
+        // 2. Handle Rotation (Yaw + Pitch)
+        ApplyRotation(turn);
+
+    }
+
+    void Update()
+    {
+        if (engineAudio != null && rb != null)
         {
-            Quaternion turnRotation = Quaternion.Euler(0f, turnAngle, 0f);
-            rb.MoveRotation(rb.rotation * turnRotation);
+            float speed = rb.linearVelocity.magnitude;
+
+            // Pitch logic
+            engineAudio.pitch = 1f + (speed * 0.05f);
+
+            // NEW: Volume fade logic. 
+            // If we are moving, smoothly raise volume to 0.5f. If stopped, fade down to 0.1f.
+            float targetVolume = speed > 0.1f ? 0.5f : 0.1f;
+            engineAudio.volume = Mathf.Lerp(engineAudio.volume, targetVolume, Time.deltaTime * 2f);
         }
     }
 
-    // Read movement from the Input Action (returns normalized Vector2)
+    private void ApplyRotation(float turnInput)
+    {
+        // Calculate the turn (Yaw)
+        float turnAngle = turnInput * rotationSpeed * Time.fixedDeltaTime;
+        Quaternion turnRotation = Quaternion.Euler(0f, turnAngle, 0f);
+
+        // Calculate the Slope Alignment (Pitch)
+        Quaternion slopeRotation = CalculateSlopeRotation();
+
+        // Combine current rotation with the turn, then smooth it toward the slope tilt
+        Quaternion finalRotation = Quaternion.Slerp(rb.rotation * turnRotation, slopeRotation, Time.fixedDeltaTime * pitchAdjustmentSpeed);
+
+        rb.MoveRotation(finalRotation);
+    }
+
+    private Quaternion CalculateSlopeRotation()
+    {
+        RaycastHit hit;
+        // Shoot a ray from slightly above the center of the tank downward
+        if (Physics.Raycast(transform.position + Vector3.up * 0.5f, Vector3.down, out hit, groundCheckDistance))
+        {
+            // Project the current forward direction onto the plane we just hit
+            Vector3 groundNormal = hit.normal;
+            Vector3 forwardOnSlope = Vector3.ProjectOnPlane(transform.forward, groundNormal);
+
+            // Create a rotation that looks forward along the slope while keeping the ground normal as 'Up'
+            return Quaternion.LookRotation(forwardOnSlope, groundNormal);
+        }
+
+        // If in mid-air, try to keep the rotation flat
+        return Quaternion.LookRotation(transform.forward, Vector3.up);
+    }
+
     private Vector2 ReadInput()
     {
         if (moveAction == null) return Vector2.zero;
