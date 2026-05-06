@@ -1,107 +1,105 @@
 using System;
 using UnityEngine;
-using UnityEngine.AI;
+using UnityEngine.AI; // We need this library to use Unity's built-in pathfinding system (NavMesh).
 
 /// <summary>
 /// Simple NavMesh-based enemy AI: spots the player within a configurable radius and chases them.
-/// - Attach to the enemy GameObject that has a NavMeshAgent.
-/// - Assign the player by tag "Player" or set PlayerTransform in the inspector.
 /// </summary>
-[DisallowMultipleComponent]
+[DisallowMultipleComponent] // Prevents accidentally attaching two AI brains to one tank!
 public class EnemyAI : MonoBehaviour
 {
+    // --- THE STATE MACHINE ---
+    // A Finite State Machine (FSM). 'enums' are custom lists of states. 
+    // This tells the script the enemy can only ever be doing exactly ONE of these three things at a time.
     public enum State { Idle, Patrol, Chase }
 
     [Header("References")]
-    public NavMeshAgent agent;               // (optional) will GetComponent if null
-    [Tooltip("Optional: assign the player transform. If null the script will find the GameObject tagged 'Player'")]
-    public Transform playerTransform;
+    // The NavMeshAgent is the "driver" of the AI. It calculates paths around obstacles automatically.
+    public NavMeshAgent agent;
+    public Transform playerTransform; // Who are we hunting?
 
     [Header("Behavior")]
-    [Tooltip("If true the enemy will patrol between the provided patrolPoints")]
     public bool usePatrol = false;
+    // Arrays (indicated by []) let us store a list of multiple points, rather than just one.
     public Transform[] patrolPoints;
     public float patrolSpeed = 2f;
     public float chaseSpeed = 4f;
 
     [Header("Detection")]
-    [Tooltip("Distance (units) at which the enemy spots the player and starts chasing")]
     public float detectionRadius = 12f;
-
-    [Tooltip("Distance at which the enemy gives up chase and returns to patrol/idle")]
     public float loseSightDistance = 18f;
 
     [Header("Collision pause")]
-    [Tooltip("When colliding with the player the agent will pause. Resume chasing when player is this far away or more.")]
     public float resumeDistanceAfterCollision = 5f;
 
     [Header("Collision response (tuning)")]
-    [Tooltip("Multiplier applied to the player's velocity immediately after collision (0..1). Lower = less knockback.")]
+    // [Range] turns this variable into a nice slider in the Inspector.
     [Range(0f, 1f)]
     public float collisionDampFactor = 0.25f;
-    [Tooltip("Clamp upward (Y) velocity on the player after collision to prevent launching.")]
     public float maxCollisionUpwardVelocity = 2f;
-    [Tooltip("Clamp total player speed after collision.")]
     public float maxCollisionSpeed = 6f;
 
     [Header("Pitch/Slope Settings")]
-    [Tooltip("How fast the enemy tilts to match the ground.")]
     public float pitchAdjustmentSpeed = 5f;
-    [Tooltip("How far down to look for the ground.")]
     public float groundCheckDistance = 1.5f;
 
     [Header("Misc")]
-    [Tooltip("How close to a patrol point before moving to the next")]
-    public float waypointTolerance = 0.5f;
+    public float waypointTolerance = 0.5f; // How close is "close enough" to a patrol point?
 
-    // runtime
+    // --- RUNTIME VARIABLES ---
+    // Private variables handle the background math while the game runs.
     private State state = State.Idle;
     private int patrolIndex = 0;
+
+    // Performance trick: Checking exact distances uses square roots, which are slow.
+    // We pre-calculate the "squared" distances to do faster math!
     private float sqrDetectionRadius;
     private float sqrLoseSightDistance;
-
-    // paused-on-collision flag
     private bool pausedByCollision = false;
 
-    // cached components
     private Rigidbody rb;
-    private Component sync; // optional sync component (toggled via reflection)
+    private Component sync;
 
+    // Awake runs before Start. We use it to grab all the components we need before the game fully begins.
     void Awake()
     {
         if (agent == null) agent = GetComponent<NavMeshAgent>();
         rb = GetComponent<Rigidbody>();
 
-        // Allow the Rigidbody to Pitch (X rotation) but freeze Roll (Z rotation) to stop tipping
         if (rb != null)
         {
+            // Stop the tank from barrel-rolling on its side (Z axis)
             rb.constraints = RigidbodyConstraints.FreezeRotationZ;
+
+            // --- THE ANTI-FLIP FIX EXPLAINED ---
+            // In Unity, every object has a "Center of Mass" (the balancing point of its weight).
+            // By default, it is perfectly in the center (0,0,0). When two heavy tanks crash, 
+            // hitting above the center of mass acts like a lever, causing them to flip over.
+            // By moving the center of mass down to -0.5f on the Y-Axis, we force all the "weight" 
+            // down into the tank's treads. This makes it bottom-heavy (like a Weeble-Wobble toy).
+            // Now, when rammed, the tank slides backward instead of violently flipping onto its roof!
+            rb.centerOfMass = new Vector3(0f, -0.5f, 0f);
         }
 
-        // get the sync component by name (optional, may not exist)
         sync = GetComponent("NavMeshAgentRigidbodySync") as Component;
-
         sqrDetectionRadius = detectionRadius * detectionRadius;
         sqrLoseSightDistance = loseSightDistance * loseSightDistance;
     }
 
     void Start()
     {
-        // Try to find the player on boot (might fail if player is currently respawning/hidden)
         TryFindPlayer();
-
-        // Ensure agent is on NavMesh at start (best-effort)
-        EnsureAgentOnNavMesh();
-
-        // ensure sync is enabled initially
+        EnsureAgentOnNavMesh(); // Make sure the AI didn't spawn inside a wall or floating in the air.
         SetSyncEnabled(true);
 
+        // Check our starting orders: should we stand still, or start walking a patrol route?
         if (usePatrol && patrolPoints != null && patrolPoints.Length > 0)
         {
             state = State.Patrol;
             patrolIndex = 0;
             agent.isStopped = false;
             agent.speed = patrolSpeed;
+            // SetDestination tells the NavMesh system to calculate a path to that exact coordinate.
             agent.SetDestination(patrolPoints[patrolIndex].position);
         }
         else
@@ -111,36 +109,34 @@ public class EnemyAI : MonoBehaviour
         }
     }
 
+    // Update runs every single frame. This is the AI's "Brain".
     void Update()
     {
-        // NEW: If we don't have a target (e.g. they were respawning when we booted up), keep looking!
+        // 1. Is the player missing? Try to find them!
         if (playerTransform == null)
         {
             TryFindPlayer();
-
-            // If the player is STILL hidden, don't run the rest of the logic this frame
-            if (playerTransform == null) return;
+            if (playerTransform == null) return; // If we still can't find them, give up for this frame.
         }
 
-        // If collision-paused, check if we should resume
+        // 2. Are we recovering from ramming the player?
         if (pausedByCollision && playerTransform != null)
         {
             float sqrDistToPlayer = (playerTransform.position - transform.position).sqrMagnitude;
             if (sqrDistToPlayer >= resumeDistanceAfterCollision * resumeDistanceAfterCollision)
             {
-                // resume chasing immediately when player is far enough
+                // The player drove away, we can resume chasing!
                 pausedByCollision = false;
                 SetPausedState(false);
                 BeginChase();
             }
             else
             {
-                // keep paused; skip state updates
-                return;
+                return; // Player is still too close, stay frozen.
             }
         }
 
-        // Always check for player presence and distance (unless pausedByCollision handled above)
+        // 3. Radar System: Detect the player if they get too close.
         if (playerTransform != null)
         {
             var toPlayer = playerTransform.position - transform.position;
@@ -148,37 +144,26 @@ public class EnemyAI : MonoBehaviour
 
             if (sqrDist <= sqrDetectionRadius)
             {
-                // Spot player: start chase if not currently chasing
-                if (state != State.Chase && !pausedByCollision)
-                    BeginChase();
+                // Player stepped into our circle!
+                if (state != State.Chase && !pausedByCollision) BeginChase();
             }
             else if (state == State.Chase && sqrDist > sqrLoseSightDistance)
             {
-                // Lost player: return to default behaviour
+                // Player ran far enough away to escape!
                 BecomeDefaultState();
             }
         }
 
-        // State updates
+        // 4. The State Machine "Switch". Runs ONLY the specific code for our current behavior.
         switch (state)
         {
-            case State.Idle:
-                // nothing to do
-                break;
-
-            case State.Patrol:
-                UpdatePatrol();
-                break;
-
-            case State.Chase:
-                UpdateChase();
-                break;
+            case State.Idle: break;
+            case State.Patrol: UpdatePatrol(); break;
+            case State.Chase: UpdateChase(); break;
         }
     }
 
-    // --- NEW: LATE UPDATE FOR PITCH ---
-    // We use LateUpdate because the NavMeshAgent calculates its steering in Update.
-    // This allows us to overwrite the Agent's "flat" rotation right before the frame is rendered!
+    // LateUpdate runs right after Update. We use this to manually tilt the tank AFTER the AI chooses its path.
     void LateUpdate()
     {
         ApplySlopeAlignment();
@@ -187,53 +172,42 @@ public class EnemyAI : MonoBehaviour
     private void ApplySlopeAlignment()
     {
         RaycastHit hit;
-        // Shoot a ray from slightly above the center of the tank downward
+        // Physics.Raycast shoots an invisible laser straight down to find the floor.
         if (Physics.Raycast(transform.position + Vector3.up * 0.5f, Vector3.down, out hit, groundCheckDistance))
         {
             Vector3 groundNormal = hit.normal;
-
-            // Get the forward direction the NavMeshAgent is trying to face
             Vector3 currentForward = transform.forward;
 
-            // Project it onto the slope
+            // This squashes our forward direction flat against the angle of the hill.
             Vector3 forwardOnSlope = Vector3.ProjectOnPlane(currentForward, groundNormal);
 
             if (forwardOnSlope != Vector3.zero)
             {
-                // Calculate target rotation keeping the Yaw but adding Pitch
                 Quaternion slopeRotation = Quaternion.LookRotation(forwardOnSlope, groundNormal);
-
-                // Smoothly Slerp the transform's rotation to match the hill
                 transform.rotation = Quaternion.Slerp(transform.rotation, slopeRotation, Time.deltaTime * pitchAdjustmentSpeed);
             }
         }
     }
 
-    // NEW: A dedicated helper method to safely look for the player
     private void TryFindPlayer()
     {
         GameObject p = GameObject.FindGameObjectWithTag("Player");
         if (p != null)
         {
             playerTransform = p.transform;
-            Debug.Log("[EnemyAI] Target Acquired!", gameObject);
         }
     }
 
     private void BeginChase()
     {
-        // Try to ensure agent is on navmesh before chasing
         EnsureAgentOnNavMesh();
-
-        // Ensure agent is enabled (it may have been disabled while paused)
         if (agent != null) agent.enabled = true;
 
         state = State.Chase;
         agent.isStopped = false;
         agent.speed = chaseSpeed;
 
-        if (playerTransform != null)
-            agent.SetDestination(playerTransform.position);
+        if (playerTransform != null) agent.SetDestination(playerTransform.position);
     }
 
     private void UpdateChase()
@@ -244,23 +218,15 @@ public class EnemyAI : MonoBehaviour
             return;
         }
 
-        // If agent can't path, attempt to resample and set destination again
+        // "pathStatus" checks if the AI is confused, stuck, or can't find a way to the player.
         if (!agent.isOnNavMesh || !agent.hasPath || agent.pathStatus != NavMeshPathStatus.PathComplete)
         {
-            Debug.LogWarning($"[EnemyAI] Agent cannot path (isOnNavMesh={agent.isOnNavMesh}, hasPath={agent.hasPath}, pathStatus={agent.pathStatus}). Trying to sample position and retry.", gameObject);
-            if (EnsureAgentOnNavMesh())
-            {
-                agent.SetDestination(playerTransform.position);
-            }
-            else
-            {
-                // if still no navmesh, do nothing this frame
-                return;
-            }
+            if (EnsureAgentOnNavMesh()) agent.SetDestination(playerTransform.position);
+            else return;
         }
         else
         {
-            // Regular chase update
+            // Every frame, update our path to where the player is currently standing.
             agent.SetDestination(playerTransform.position);
         }
     }
@@ -268,10 +234,12 @@ public class EnemyAI : MonoBehaviour
     private void UpdatePatrol()
     {
         if (patrolPoints == null || patrolPoints.Length == 0) return;
-        if (agent.pathPending) return;
+        if (agent.pathPending) return; // Wait if the computer is still doing pathfinding math.
 
+        // "remainingDistance" tells us how close we are to our current waypoint.
         if (agent.remainingDistance <= waypointTolerance)
         {
+            // The % (modulo) operator loops our index back to 0 when we reach the end of the array!
             patrolIndex = (patrolIndex + 1) % patrolPoints.Length;
             agent.SetDestination(patrolPoints[patrolIndex].position);
         }
@@ -293,7 +261,7 @@ public class EnemyAI : MonoBehaviour
         }
     }
 
-    // Ensures the agent is on the NavMesh. Returns true if agent is on NavMesh after the call.
+    // Safety net function: Forces the agent back onto the nearest valid, walkable ground.
     private bool EnsureAgentOnNavMesh()
     {
         if (agent == null) agent = GetComponent<NavMeshAgent>();
@@ -312,52 +280,76 @@ public class EnemyAI : MonoBehaviour
         return false;
     }
 
-    // --- Collision handling: pause on contact with player, resume when player is far enough ---
+    // Unity Physics Event: This automatically triggers whenever two objects physically crash into each other.
     void OnCollisionEnter(Collision collision)
     {
+        // Did we hit the player?
         if (collision.collider != null && collision.collider.CompareTag("Player"))
         {
-            // Pause movement on contact
             pausedByCollision = true;
 
-            // SAFETY CHECK: Only give NavMesh commands if the agent is fully awake and on the floor!
+            // Stop the AI's engine
             if (agent != null && agent.isActiveAndEnabled && agent.isOnNavMesh)
             {
                 agent.isStopped = true;
                 agent.ResetPath();
 
-                // zero velocity if available (softly supported across versions)
 #if UNITY_2019_1_OR_NEWER
                 agent.velocity = Vector3.zero;
 #endif
             }
 
-            // disable agent to be extra sure it won't move transform
             if (agent != null) agent.enabled = false;
-
-            // Disable the sync component so FixedUpdate won't force movement (if present)
             SetSyncEnabled(false);
 
-            // DAMP player rigidbody (so player doesn't fly off)
+            // --- PROTECT THE PLAYER FROM FLYING ---
+            // When two 1500-mass objects collide, Unity generates massive kinetic energy.
+            // We intercept that energy here before the player gets launched like a rocket.
             Rigidbody playerRb = collision.collider.attachedRigidbody;
             if (playerRb == null) playerRb = collision.collider.GetComponentInParent<Rigidbody>();
+
             if (playerRb != null)
             {
-                // Damp existing velocity and clamp
+                // Read the player's post-crash velocity and apply our 'collisionDampFactor' (e.g., 0.25).
+                // This instantly absorbs 75% of the crash energy!
                 Vector3 newVel = playerRb.linearVelocity * collisionDampFactor;
+
+                // If they are still moving too fast horizontally, cap their speed.
                 float mag = newVel.magnitude;
                 if (mag > maxCollisionSpeed) newVel = newVel.normalized * maxCollisionSpeed;
 
-                if (newVel.y > maxCollisionUpwardVelocity)
-                    newVel.y = maxCollisionUpwardVelocity;
+                // If the crash is trying to launch them upwards (Y-axis), force them back down.
+                if (newVel.y > maxCollisionUpwardVelocity) newVel.y = maxCollisionUpwardVelocity;
 
+                // Apply the new, safe velocity back to the player.
                 playerRb.linearVelocity = newVel;
-                playerRb.angularVelocity *= collisionDampFactor;
+                playerRb.angularVelocity *= collisionDampFactor; // Kill any crazy spinning
+            }
+
+            // --- PROTECT THE ENEMY FROM FLYING EXPLAINED ---
+            // The code above saved the player, but Newton's Third Law means the Enemy 
+            // still absorbed half the crash! We need to do the exact same safety check for ourselves.
+            if (rb != null)
+            {
+                // Grab the enemy's current speed/direction
+                Vector3 myVel = rb.linearVelocity;
+
+                // The Y-axis controls vertical height. If the physics engine says "launch this enemy 
+                // upward at 50 meters per second", we step in and say "No, you are only allowed 
+                // to bounce upward at 2 meters per second max."
+                if (myVel.y > maxCollisionUpwardVelocity) myVel.y = maxCollisionUpwardVelocity;
+
+                // Re-apply the safe, clamped velocity to the enemy tank.
+                rb.linearVelocity = myVel;
+
+                // Angular Velocity is "spin". By multiplying it by a fraction, we stop the 
+                // tank from spinning like a top after a heavy impact.
+                rb.angularVelocity *= collisionDampFactor;
             }
         }
     }
 
-    // Reflection helper: safely set enableSync on optional sync component (if present)
+    // Advanced programming tool: "Reflection". This looks into a totally separate script to change a variable!
     private void SetSyncEnabled(bool enabled)
     {
         if (sync == null) sync = GetComponent("NavMeshAgentRigidbodySync") as Component;
@@ -366,16 +358,9 @@ public class EnemyAI : MonoBehaviour
         {
             var t = sync.GetType();
             var f = t.GetField("enableSync");
-            if (f != null)
-            {
-                f.SetValue(sync, enabled);
-                return;
-            }
+            if (f != null) { f.SetValue(sync, enabled); return; }
             var p = t.GetProperty("enableSync");
-            if (p != null && p.CanWrite)
-            {
-                p.SetValue(sync, enabled, null);
-            }
+            if (p != null && p.CanWrite) { p.SetValue(sync, enabled, null); }
         }
         catch (Exception ex)
         {
@@ -383,12 +368,10 @@ public class EnemyAI : MonoBehaviour
         }
     }
 
-    // Restore agent and sync when unpausing
     private void SetPausedState(bool paused)
     {
         if (!paused)
         {
-            // re-enable sync and agent
             SetSyncEnabled(true);
             if (agent != null)
             {
@@ -398,11 +381,12 @@ public class EnemyAI : MonoBehaviour
         }
         else
         {
-            // handled in OnCollisionEnter
             pausedByCollision = true;
         }
     }
 
+    // This is a special command that ONLY runs in the Unity Editor. It will not compile into the final shipped game.
+    // It draws those helpful colored wireframe spheres around the enemy so you can visually see the radar zones!
 #if UNITY_EDITOR
     void OnDrawGizmosSelected()
     {

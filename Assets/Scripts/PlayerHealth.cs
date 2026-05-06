@@ -1,103 +1,107 @@
-using System.Collections;
 using UnityEngine;
+using System.Collections;
 
+/// <summary>
+/// Full-featured Player Health system.
+/// </summary>
 [DisallowMultipleComponent]
 public class PlayerHealth : MonoBehaviour
 {
-    [Header("Health Settings")]
-    public int maxHealth = 4;
-    private int currentHealth;
+    [Header("Health & Armor Stats")]
+    public int maxHealth = 10;
+    public int armorBonus = 0;
 
-    // NEW: Armor System
-    [Header("Armor Settings")]
-    public int currentArmor = 0;
+    [Header("Respawn Invulnerability")]
+    [Tooltip("Seconds of safety after respawning.")]
+    public float invulnerabilityDuration = 1.5f;
+    [Tooltip("How fast the player model flashes when respawning.")]
+    public float flickerInterval = 0.1f;
 
-    [Header("Respawn Settings")]
-    public float respawnDelay = 2f;
-
-    [Header("Damage/Death Effects")]
+    [Header("Visual & Audio Feedback")]
+    public GameObject damageVFX;
     public GameObject deathVFX;
+    public AudioClip damageSound;
     public AudioClip deathSound;
-    [Range(0f, 1f)] public float volume = 1f;
+    public AudioClip healSound;
 
-    // Cache components to disable them during respawn
+    [Header("Screen Shake")]
+    public bool shakeCameraOnDamage = true;
+
+    [Header("Debug Info")]
+    [SerializeField] private int currentHealth;
+    [SerializeField] private bool isInvulnerable = false;
+
+    // We brought the renderers back so we can flash the tank!
+    private MeshRenderer[] renderers;
     private Rigidbody rb;
-    private Player_Controller controller;
-    private Collider[] colliders;
-    private Renderer[] renderers;
+    private MonoBehaviour controller;
 
-    void Start()
+    private void Awake()
     {
-        currentHealth = maxHealth;
-        currentArmor = 0; // Start with no extra armor
-        UpdateHealthUI();
-
         rb = GetComponent<Rigidbody>();
-        controller = GetComponent<Player_Controller>();
+        controller = GetComponent("Player_Controller") as MonoBehaviour;
 
-        // Grab all child colliders and renderers
-        colliders = GetComponentsInChildren<Collider>();
-        renderers = GetComponentsInChildren<Renderer>();
+        // Grab all the 3D models on the tank so we can flash them later
+        renderers = GetComponentsInChildren<MeshRenderer>();
+
+        currentHealth = maxHealth;
     }
 
-    // UPDATE: Armor takes damage before Hull
+    private void Start()
+    {
+        UpdateGameState();
+    }
+
     public void TakeDamage(int damageAmount)
     {
-        if (currentHealth <= 0) return; // Already dead, ignore extra bullets
+        // Still ignore damage if dead or currently in our respawn I-frames
+        if (currentHealth <= 0 || isInvulnerable) return;
 
-        // NEW: Tell the Game State we took a hit to trigger the UI red flash!
-        if (Game_State.Instance != null) Game_State.Instance.NotifyPlayerDamaged();
-
-        // 1. Armor takes the hit first
-        if (currentArmor > 0)
+        int damageAfterArmor = damageAmount;
+        if (armorBonus > 0)
         {
-            // Figure out how much the armor can absorb
-            int damageToArmor = Mathf.Min(currentArmor, damageAmount);
-            currentArmor -= damageToArmor;
-            damageAmount -= damageToArmor;
-
-            Debug.Log($"[PlayerHealth] Armor absorbed {damageToArmor} damage! Armor remaining: {currentArmor}");
+            damageAfterArmor = Mathf.Max(1, damageAmount - 1);
         }
 
-        // 2. If there is still damage left over, hit the hull
-        if (damageAmount > 0)
+        currentHealth -= damageAfterArmor;
+
+        if (damageSound != null) AudioSource.PlayClipAtPoint(damageSound, transform.position);
+        if (damageVFX != null) Instantiate(damageVFX, transform.position, Quaternion.identity);
+
+        if (Game_State.Instance != null)
         {
-            currentHealth -= damageAmount;
-            Debug.Log($"[PlayerHealth] Hull took {damageAmount} damage! Health remaining: {currentHealth}");
+            Game_State.Instance.NotifyPlayerDamaged();
         }
 
-        UpdateHealthUI();
+        if (shakeCameraOnDamage)
+        {
+            CameraFollow cam = Camera.main?.GetComponent<CameraFollow>();
+            if (cam != null) cam.TriggerShake();
+        }
 
         if (currentHealth <= 0)
         {
             Die();
         }
+        // REMOVED: We no longer trigger the Invulnerability Coroutine here when taking a hit!
+
+        UpdateGameState();
     }
 
-    // NEW: Health Pickup Logic
-    public void Heal(int healAmount)
+    public void Heal(int amount)
     {
-        currentHealth += healAmount;
-        if (currentHealth > maxHealth)
-        {
-            currentHealth = maxHealth; // Prevent overhealing the hull
-        }
-
-        UpdateHealthUI();
-        Debug.Log($"[PlayerHealth] Healed! Current Health: {currentHealth}");
+        if (currentHealth >= maxHealth) return;
+        currentHealth = Mathf.Min(currentHealth + amount, maxHealth);
+        if (healSound != null) AudioSource.PlayClipAtPoint(healSound, transform.position);
+        UpdateGameState();
     }
 
-    // NEW: Armor Pickup Logic
-    public void AddArmor(int armorAmount)
+    public void AddArmor(int amount)
     {
-        currentArmor += armorAmount;
-        Debug.Log($"[PlayerHealth] Armor Module equipped! Current Armor: {currentArmor}");
-
-        // NEW: Tell the Game State to trigger the UI!
+        armorBonus += amount;
         if (Game_State.Instance != null) Game_State.Instance.NotifyArmorPickedUp();
     }
 
-    // NEW: Helper so we don't accidentally consume health packs when full
     public bool IsAtMaxHealth()
     {
         return currentHealth >= maxHealth;
@@ -105,96 +109,94 @@ public class PlayerHealth : MonoBehaviour
 
     private void Die()
     {
-        // 1. Play Effects
-        if (deathSound != null) AudioSource.PlayClipAtPoint(deathSound, transform.position, volume);
-        if (deathVFX != null)
-        {
-            GameObject vfx = Instantiate(deathVFX, transform.position, Quaternion.identity);
-            Destroy(vfx, 2f);
-        }
+        currentHealth = 0;
+        UpdateGameState();
 
-        // 2. Hide the player immediately so they look destroyed
-        SetPlayerActive(false);
+        if (deathSound != null) AudioSource.PlayClipAtPoint(deathSound, transform.position);
+        if (deathVFX != null) Instantiate(deathVFX, transform.position, Quaternion.identity);
 
-        // 3. Start the delay/heal process
-        StartCoroutine(RespawnRoutine());
-    }
-
-    private IEnumerator RespawnRoutine()
-    {
-        // Wait for the respawn delay so the player can watch the explosion
-        yield return new WaitForSeconds(respawnDelay);
-
-        // Heal up FIRST and strip away any broken armor
-        currentHealth = maxHealth;
-        currentArmor = 0;
-        UpdateHealthUI();
-
-        // Check lives
         if (Game_State.Instance != null)
         {
             Game_State.Instance.LoseLife(1);
-            if (Game_State.Instance.Lives <= 0)
+
+            if (Game_State.Instance.Lives > 0)
             {
-                Debug.Log("GAME OVER!");
-                yield break;
+                Respawn();
+            }
+            else
+            {
+                if (controller != null) controller.enabled = false;
+                if (rb != null) rb.isKinematic = true;
             }
         }
+    }
 
-        // --- THE BULLETPROOF TELEPORT ---
-        // Find the RoundManager and ask it for the safe zone coordinates
+    private void Respawn()
+    {
+        currentHealth = maxHealth;
+        armorBonus = 0;
+
         RoundManager rm = FindObjectOfType<RoundManager>();
         if (rm != null)
         {
-            Transform safeZone = rm.GetCurrentSpawnPoint();
-            if (safeZone != null)
+            Transform spawn = rm.GetCurrentSpawnPoint();
+            if (spawn != null)
             {
-                // 1. Move the raw transform
-                transform.position = safeZone.position;
-                transform.rotation = safeZone.rotation;
+                transform.position = spawn.position;
+                transform.rotation = spawn.rotation;
 
-                // 2. Force the Rigidbody to perfectly match, and kill all momentum
                 if (rb != null)
                 {
-                    rb.position = safeZone.position;
-                    rb.rotation = safeZone.rotation;
                     rb.linearVelocity = Vector3.zero;
                     rb.angularVelocity = Vector3.zero;
                 }
-
-                // 3. FORCE Unity's physics engine to register the new location immediately!
-                Physics.SyncTransforms();
             }
         }
-        // --------------------------------
 
-        // "Show" the player again ONLY AFTER the teleport is 100% finished
-        SetPlayerActive(true);
+        UpdateGameState();
 
-        // Snap the camera safely to the new spawn location
-        CameraFollow cam = Camera.main.GetComponent<CameraFollow>();
-        if (cam != null)
-        {
-            cam.SnapToTarget();
-        }
+        // This is now the ONLY place the invulnerability flashing is triggered!
+        StartCoroutine(InvulnerabilityRoutine());
     }
 
-    // Helper method to toggle the player's presence in the world
-    private void SetPlayerActive(bool isActive)
-    {
-        if (controller != null) controller.enabled = isActive;
-        foreach (var col in colliders) if (col != null) col.enabled = isActive;
-        foreach (var ren in renderers) if (ren != null) ren.enabled = isActive;
-
-        if (rb != null) rb.isKinematic = !isActive;
-    }
-
-    private void UpdateHealthUI()
+    private void UpdateGameState()
     {
         if (Game_State.Instance != null)
         {
-            float healthPercent = (float)currentHealth / maxHealth;
-            Game_State.Instance.UpdateHullStability(healthPercent);
+            float ratio = (float)currentHealth / maxHealth;
+            Game_State.Instance.UpdateHullStability(ratio);
         }
+    }
+
+    // --- RESTORED FLASHING LOGIC ---
+    private IEnumerator InvulnerabilityRoutine()
+    {
+        isInvulnerable = true;
+        float timer = 0;
+
+        while (timer < invulnerabilityDuration)
+        {
+            // Toggle all mesh renderers off and on
+            foreach (var r in renderers)
+            {
+                if (r != null) r.enabled = !r.enabled;
+            }
+
+            yield return new WaitForSeconds(flickerInterval);
+            timer += flickerInterval;
+        }
+
+        // Ensure all renderers are locked back ON when finished
+        foreach (var r in renderers)
+        {
+            if (r != null) r.enabled = true;
+        }
+
+        isInvulnerable = false;
+    }
+
+    private void OnValidate()
+    {
+        currentHealth = Mathf.Clamp(currentHealth, 0, maxHealth);
     }
 }

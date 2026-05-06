@@ -310,6 +310,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Tank_Movement
   speed: 5
   rotationSpeed: 120
+  pitchAdjustmentSpeed: 5
+  groundCheckDistance: 1.5
 --- !u!54 &1065939947158132910
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -318,7 +320,7 @@ Rigidbody:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 3494510384982098656}
   serializedVersion: 5
-  m_Mass: 50
+  m_Mass: 1500
   m_LinearDamping: 0
   m_AngularDamping: 0.05
   m_CenterOfMass: {x: 0, y: 0, z: 0}
@@ -372,11 +374,17 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerHealth
   maxHealth: 4
-  currentArmor: 0
-  respawnDelay: 2
+  armorBonus: 0
+  invulnerabilityDuration: 1.5
+  flickerInterval: 0.1
+  damageVFX: {fileID: 0}
   deathVFX: {fileID: 8464950693656172981, guid: 83ad694f134ab954580473212156b35a, type: 3}
+  damageSound: {fileID: 0}
   deathSound: {fileID: 8300000, guid: 5b62198761a7a734eb650830c81de4cf, type: 3}
-  volume: 1
+  healSound: {fileID: 0}
+  shakeCameraOnDamage: 1
+  currentHealth: 0
+  isInvulnerable: 0
 --- !u!1 &5848506278246041151
 GameObject:
   m_ObjectHideFlags: 0

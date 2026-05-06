@@ -40,6 +40,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 3682838240332026110}
     m_Modifications:
+    - target: {fileID: 3762900226313849965, guid: ce05238c8b6ae7441b51e96140a1d4b3, type: 3}
+      propertyPath: m_Mass
+      value: 1000
+      objectReference: {fileID: 0}
     - target: {fileID: 6388146347936779761, guid: ce05238c8b6ae7441b51e96140a1d4b3, type: 3}
       propertyPath: m_Name
       value: Round One Enemy Prefab
