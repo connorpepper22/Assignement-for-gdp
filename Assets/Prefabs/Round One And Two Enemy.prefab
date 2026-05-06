@@ -165,7 +165,7 @@ GameObject:
   - component: {fileID: 1296609399559766380}
   - component: {fileID: 7262147645068927463}
   m_Layer: 8
-  m_Name: Round One Enemy
+  m_Name: Round One And Two Enemy
   m_TagString: Enemy
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
